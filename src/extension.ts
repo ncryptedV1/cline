@@ -660,6 +660,29 @@ export async function activate(context: vscode.ExtensionContext) {
 		}),
 	)
 
+	// Register the toggleVoiceInput command handler
+	context.subscriptions.push(
+		vscode.commands.registerCommand("cline.toggleVoiceInput", async () => {
+			const activeWebviewProvider = WebviewProvider.getVisibleInstance()
+
+			if (activeWebviewProvider) {
+				// Call the voice service toggle method directly
+				try {
+					const isRecording = await activeWebviewProvider.controller.voiceService.toggleRecording()
+					console.log(`[Extension] Voice input toggled, recording: ${isRecording}`)
+				} catch (error) {
+					console.error("[Extension] Failed to toggle voice input:", error)
+					HostProvider.window.showMessage({
+						type: ShowMessageType.ERROR,
+						message: `Voice input error: ${error instanceof Error ? error.message : String(error)}`,
+					})
+				}
+			} else {
+				console.warn("[Extension] No active webview provider found for voice input toggle")
+			}
+		}),
+	)
+
 	// Register the generateGitCommitMessage command handler
 	context.subscriptions.push(
 		vscode.commands.registerCommand("cline.generateGitCommitMessage", async (scm) => {

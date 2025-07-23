@@ -35,6 +35,7 @@ import { handleGrpcRequest, handleGrpcRequestCancel } from "./grpc-handler"
 import { sendMcpMarketplaceCatalogEvent } from "./mcp/subscribeToMcpMarketplaceCatalog"
 import { sendStateUpdate } from "./state/subscribeToState"
 import { sendAddToInputEvent } from "./ui/subscribeToAddToInput"
+import { VoiceService, VoiceTranscript } from "../../services/voice/VoiceService"
 
 /*
 https://github.com/microsoft/vscode-webview-ui-toolkit-samples/blob/main/default/weather-webview/src/providers/WeatherViewProvider.ts
@@ -48,6 +49,7 @@ export class Controller {
 
 	private disposables: vscode.Disposable[] = []
 	task?: Task
+	voiceService: VoiceService
 
 	workspaceTracker: WorkspaceTracker
 	mcpHub: McpHub
@@ -77,6 +79,7 @@ export class Controller {
 		this.accountService = ClineAccountService.getInstance()
 		this.authService = AuthService.getInstance(context)
 		this.authService.restoreRefreshTokenAndRetrieveAuthInfo()
+		this.voiceService = new VoiceService()
 
 		// Clean up legacy checkpoints
 		cleanupLegacyCheckpoints(this.context.globalStorageUri.fsPath, this.outputChannel).catch((error) => {
@@ -95,14 +98,10 @@ export class Controller {
 	*/
 	async dispose() {
 		await this.clearTask()
-		while (this.disposables.length) {
-			const x = this.disposables.pop()
-			if (x) {
-				x.dispose()
-			}
-		}
-		this.workspaceTracker.dispose()
-		this.mcpHub.dispose()
+		await this.voiceService.dispose()
+		await this.workspaceTracker.dispose()
+		this.disposables.forEach((d) => d.dispose())
+		await this.mcpHub.dispose()
 
 		console.error("Controller disposed")
 	}

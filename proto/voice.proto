@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package cline;
+import "common.proto";
+option java_package = "bot.cline.proto";
+option java_multiple_files = true;
+
+// Service for voice input operations
+service VoiceService {
+  // Toggles voice input recording on or off
+  rpc toggleVoiceInput(EmptyRequest) returns (Empty);
+  
+  // Subscribe to voice recording state changes
+  rpc subscribeToVoiceState(EmptyRequest) returns (stream VoiceState);
+  
+  // Subscribe to voice transcription updates (both interim and final)
+  rpc subscribeToVoiceTranscripts(EmptyRequest) returns (stream VoiceTranscript);
+}
+
+// Voice recording state
+message VoiceState {
+  bool is_recording = 1;
+}
+
+// Voice transcription result
+message VoiceTranscript {
+  string text = 1;
+  bool is_final = 2;
+}
+
+// Voice error information
+message VoiceError {
+  string message = 1;
+  string code = 2;
+} 

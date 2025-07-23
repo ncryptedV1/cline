@@ -9,7 +9,7 @@ import Tooltip from "@/components/common/Tooltip"
 import ApiOptions from "@/components/settings/ApiOptions"
 import { normalizeApiConfiguration, getModeSpecificFields } from "@/components/settings/utils/providerUtils"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { FileServiceClient, StateServiceClient, ModelsServiceClient } from "@/services/grpc-client"
+import { FileServiceClient, StateServiceClient, ModelsServiceClient, VoiceServiceClient } from "@/services/grpc-client"
 import {
 	ContextMenuOptionType,
 	getContextMenuOptions,
@@ -45,6 +45,7 @@ import { useClickAway, useEvent, useWindowSize } from "react-use"
 import styled from "styled-components"
 import ClineRulesToggleModal from "../cline-rules/ClineRulesToggleModal"
 import ServersToggleModal from "./ServersToggleModal"
+import { vscode } from "@/utils/vscode"
 
 const getImageDimensions = (dataUrl: string): Promise<{ width: number; height: number }> => {
 	return new Promise((resolve, reject) => {
@@ -70,7 +71,7 @@ const DEFAULT_CONTEXT_MENU_OPTION = getContextMenuOptionIndex(ContextMenuOptionT
 interface ChatTextAreaProps {
 	inputValue: string
 	activeQuote: string | null
-	setInputValue: (value: string) => void
+	setInputValue: React.Dispatch<React.SetStateAction<string>>
 	sendingDisabled: boolean
 	placeholderText: string
 	selectedFiles: string[]
@@ -318,12 +319,88 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		const [showDimensionError, setShowDimensionError] = useState(false)
 		const dimensionErrorTimerRef = useRef<NodeJS.Timeout | null>(null)
 
+		// Voice input state
+		const [isRecording, setIsRecording] = useState(false)
+		const [isVoiceSupported, setIsVoiceSupported] = useState(false)
+		const [interimTranscript, setInterimTranscript] = useState("")
+
 		const [fileSearchResults, setFileSearchResults] = useState<SearchResult[]>([])
 		const [searchLoading, setSearchLoading] = useState(false)
 		const [, metaKeyChar] = useMetaKeyDetection(platform)
 
 		// Add a ref to track previous menu state
 		const prevShowModelSelector = useRef(showModelSelector)
+
+		// Voice recording toggle function
+		const toggleVoiceRecording = useCallback(async () => {
+			console.log("[Voice Input] Toggle voice recording")
+
+			try {
+				// Use proper gRPC client to call the voice service
+				await VoiceServiceClient.toggleVoiceInput(EmptyRequest.create({}))
+				console.log("[Voice Input] Voice input toggled successfully")
+			} catch (error) {
+				console.error("[Voice Input] Error toggling voice input:", error)
+			}
+		}, [])
+
+		// Initialize voice input support and subscriptions
+		useEffect(() => {
+			// Voice input is supported via external speech service
+			setIsVoiceSupported(true)
+
+			// Subscribe to voice state changes
+			const stateUnsubscribe = VoiceServiceClient.subscribeToVoiceState(EmptyRequest.create({}), {
+				onResponse: (voiceState) => {
+					console.log("[Voice Input] State change:", voiceState.isRecording)
+					setIsRecording(voiceState.isRecording)
+					// Clear interim transcript when stopping recording
+					if (!voiceState.isRecording) {
+						setInterimTranscript("")
+					}
+				},
+				onError: (error) => {
+					console.error("[Voice Input] State subscription error:", error)
+				},
+				onComplete: () => {
+					console.log("[Voice Input] State subscription completed")
+				},
+			})
+
+			// Subscribe to voice transcripts
+			const transcriptUnsubscribe = VoiceServiceClient.subscribeToVoiceTranscripts(EmptyRequest.create({}), {
+				onResponse: (transcript) => {
+					console.log(`[Voice Input] Transcript (${transcript.isFinal ? "final" : "interim"}):`, transcript.text)
+
+					if (transcript.isFinal) {
+						// Clear interim transcript and add final transcript to input
+						setInterimTranscript("")
+						setInputValue((prevValue: string) => {
+							const newValue = prevValue + (prevValue ? " " : "") + transcript.text.trim()
+							console.log("[Voice Input] Updating input value from:", prevValue, "to:", newValue)
+							return newValue
+						})
+					} else {
+						// Update interim transcript for live display
+						setInterimTranscript(transcript.text.trim())
+					}
+				},
+				onError: (error) => {
+					console.error("[Voice Input] Transcript subscription error:", error)
+				},
+				onComplete: () => {
+					console.log("[Voice Input] Transcript subscription completed")
+				},
+			})
+
+			// Cleanup subscriptions on unmount
+			return () => {
+				stateUnsubscribe()
+				transcriptUnsubscribe()
+			}
+		}, [setInputValue])
+
+		// Note: Voice input now uses gRPC subscriptions instead of message listeners
 
 		// Fetch git commits when Git is selected or when typing a hash
 		useEffect(() => {
@@ -1384,6 +1461,21 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 
 		return (
 			<div>
+				<style>
+					{`
+						@keyframes pulse {
+							0% {
+								opacity: 1;
+							}
+							50% {
+								opacity: 0.6;
+							}
+							100% {
+								opacity: 1;
+							}
+						}
+					`}
+				</style>
 				<div
 					style={{
 						padding: "10px 15px",
@@ -1545,7 +1637,13 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							}
 							onHeightChange?.(height)
 						}}
-						placeholder={showUnsupportedFileError || showDimensionError ? "" : placeholderText}
+						placeholder={
+							showUnsupportedFileError || showDimensionError
+								? ""
+								: isRecording && interimTranscript
+									? `${placeholderText} (Speaking: ${interimTranscript})`
+									: placeholderText
+						}
 						maxRows={10}
 						autoFocus={true}
 						style={{
@@ -1592,6 +1690,19 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							Type @ for context, / for slash commands & workflows, hold shift to drag in files/images
 						</div>
 					)}
+
+					{/* Live transcript overlay */}
+					{isRecording && interimTranscript && (
+						<div
+							className="absolute bottom-4 left-[25px] right-[60px] text-[11px] bg-[var(--vscode-editor-background)] border border-[var(--vscode-inputValidation-warningBorder)] rounded px-2 py-1 pointer-events-none z-[2]"
+							style={{
+								color: "var(--vscode-inputValidation-warningForeground)",
+								boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+							}}>
+							🎤 {interimTranscript}
+						</div>
+					)}
+
 					{(selectedImages.length > 0 || selectedFiles.length > 0) && (
 						<Thumbnails
 							images={selectedImages}
@@ -1626,6 +1737,34 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								flexDirection: "row",
 								alignItems: "center",
 							}}>
+							{/* Voice input button */}
+							{isVoiceSupported && (
+								<div
+									className={`input-icon-button ${isRecording ? "recording" : ""}`}
+									onClick={toggleVoiceRecording}
+									onKeyDown={(e) => {
+										if (e.key === "Enter" || e.key === " ") {
+											e.preventDefault()
+											toggleVoiceRecording()
+										}
+									}}
+									tabIndex={0}
+									role="button"
+									aria-label={isRecording ? "Stop voice input" : "Start voice input"}
+									style={{
+										marginRight: 5.5,
+										fontSize: 16.5,
+										color: isRecording ? "var(--vscode-inputValidation-errorBorder)" : undefined,
+										backgroundColor: isRecording
+											? "rgba(var(--vscode-inputValidation-errorForeground-rgb), 0.1)"
+											: undefined,
+										borderRadius: isRecording ? "3px" : undefined,
+										animation: isRecording ? "pulse 1.5s infinite" : undefined,
+									}}
+									title={isRecording ? "Stop voice input (Cmd+Shift+V)" : "Start voice input (Cmd+Shift+V)"}>
+									<span className={`codicon ${isRecording ? "codicon-record" : "codicon-mic"}`} />
+								</div>
+							)}
 							{/* <div
 								className={`input-icon-button ${shouldDisableImages ? "disabled" : ""} codicon codicon-device-camera`}
 								onClick={() => {

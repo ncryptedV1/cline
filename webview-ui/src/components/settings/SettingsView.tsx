@@ -4,7 +4,17 @@ import { StateServiceClient } from "@/services/grpc-client"
 import { ExtensionMessage } from "@shared/ExtensionMessage"
 import { PlanActMode, ResetStateRequest, TogglePlanActModeRequest } from "@shared/proto/state"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
-import { CheckCheck, FlaskConical, Info, LucideIcon, Settings, SquareMousePointer, SquareTerminal, Webhook } from "lucide-react"
+import {
+	CheckCheck,
+	FlaskConical,
+	Info,
+	LucideIcon,
+	Mic,
+	Settings,
+	SquareMousePointer,
+	SquareTerminal,
+	Webhook,
+} from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useEvent } from "react-use"
 import { Tab, TabContent, TabHeader, TabList, TabTrigger } from "../common/Tab"
@@ -14,6 +24,7 @@ import TerminalSettingsSection from "./sections/TerminalSettingsSection"
 import ApiConfigurationSection from "./sections/ApiConfigurationSection"
 import GeneralSettingsSection from "./sections/GeneralSettingsSection"
 import BrowserSettingsSection from "./sections/BrowserSettingsSection"
+import VoiceSettingsSection from "./sections/VoiceSettingsSection"
 import DebugSection from "./sections/DebugSection"
 import AboutSection from "./sections/AboutSection"
 
@@ -72,6 +83,13 @@ export const SETTINGS_TABS: SettingsTab[] = [
 		tooltipText: "Terminal Settings",
 		headerText: "Terminal Settings",
 		icon: SquareTerminal,
+	},
+	{
+		id: "voice",
+		name: "Voice",
+		tooltipText: "Voice & TTS Settings",
+		headerText: "Voice & TTS Settings",
+		icon: Mic,
 	},
 	// Only show in dev mode
 	...(IS_DEV
@@ -297,6 +315,9 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 
 							{/* Terminal Settings Tab */}
 							{activeTab === "terminal" && <TerminalSettingsSection renderSectionHeader={renderSectionHeader} />}
+
+							{/* Voice Settings Tab */}
+							{activeTab === "voice" && <VoiceSettingsSection renderSectionHeader={renderSectionHeader} />}
 
 							{/* Debug Tab (only in dev mode) */}
 							{IS_DEV && activeTab === "debug" && (

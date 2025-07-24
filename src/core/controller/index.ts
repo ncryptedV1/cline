@@ -191,6 +191,7 @@ export class Controller {
 			defaultTerminalProfile ?? "default",
 			enableCheckpointsSetting ?? true,
 			await getCwd(getDesktopDir()),
+			this.voiceService,
 			task,
 			images,
 			files,

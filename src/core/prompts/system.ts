@@ -16,10 +16,12 @@ export const SYSTEM_PROMPT = async (
 ) => {
 
 	if (isNextGenModel && USE_EXPERIMENTAL_CLAUDE4_FEATURES) {
+		console.log('[System Prompt] Using CLAUDE4_EXPERIMENTAL prompt with TTS_Summary tool')
 		return SYSTEM_PROMPT_CLAUDE4_EXPERIMENTAL(cwd, supportsBrowserUse, mcpHub, browserSettings)
 	}
 
   if (isNextGenModel) {
+    console.log('[System Prompt] Using CLAUDE4 prompt with TTS_Summary tool')
     return SYSTEM_PROMPT_CLAUDE4(cwd, supportsBrowserUse, mcpHub, browserSettings)
   }
 

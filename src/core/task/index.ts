@@ -86,6 +86,7 @@ import { MessageStateHandler } from "./message-state"
 import { TaskState } from "./TaskState"
 import { ToolExecutor } from "./ToolExecutor"
 import { updateApiReqMsg } from "./utils"
+import { VoiceService } from "@/services/voice/VoiceService"
 export const USE_EXPERIMENTAL_CLAUDE4_FEATURES = false
 
 export type ToolResponse = string | Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam>
@@ -122,6 +123,9 @@ export class Task {
 	private fileContextTracker: FileContextTracker
 	private modelContextTracker: ModelContextTracker
 
+	// Voice service for TTS
+	private voiceService: VoiceService
+
 	// Callbacks
 	private updateTaskHistory: (historyItem: HistoryItem) => Promise<HistoryItem[]>
 	private postStateToWebview: () => Promise<void>
@@ -153,6 +157,7 @@ export class Task {
 		defaultTerminalProfile: string,
 		enableCheckpointsSetting: boolean,
 		cwd: string,
+		voiceService: VoiceService,
 		task?: string,
 		images?: string[],
 		files?: string[],
@@ -194,6 +199,7 @@ export class Task {
 		this.chatSettings = chatSettings
 		this.enableCheckpoints = enableCheckpointsSetting
 		this.cwd = cwd
+		this.voiceService = voiceService
 
 		// Set up MCP notification callback for real-time notifications
 		this.mcpHub.setNotificationCallback(async (serverName: string, level: string, message: string) => {
@@ -311,6 +317,7 @@ export class Task {
 			this.clineIgnoreController,
 			this.workspaceTracker,
 			this.contextManager,
+			this.voiceService,
 			this.autoApprovalSettings,
 			this.browserSettings,
 			cwd,
@@ -2730,5 +2737,53 @@ export class Task {
 		}
 
 		return `<environment_details>\n${details.trim()}\n</environment_details>`
+	}
+
+	// TTS Helper Methods
+	private async triggerTTS(text?: string): Promise<void> {
+		if (!text || text.trim().length === 0) {
+			return
+		}
+
+		try {
+			// Clean up the text for better TTS (remove markdown, code blocks, etc.)
+			const cleanText = this.cleanTextForTTS(text)
+
+			// Use the voice service to speak the text
+			await this.voiceService.speakText(cleanText)
+			console.log("[Task] TTS speaking:", cleanText.substring(0, 100) + (cleanText.length > 100 ? "..." : ""))
+		} catch (error) {
+			console.error("[Task] TTS error:", error)
+			// Don't throw - TTS errors shouldn't break the task flow
+		}
+	}
+
+	private cleanTextForTTS(text: string): string {
+		// Remove markdown code blocks
+		let cleaned = text.replace(/```[\s\S]*?```/g, "[code block]")
+
+		// Remove inline code
+		cleaned = cleaned.replace(/`([^`]+)`/g, "$1")
+
+		// Remove markdown headers
+		cleaned = cleaned.replace(/^#{1,6}\s+/gm, "")
+
+		// Remove markdown bold/italic
+		cleaned = cleaned.replace(/(\*\*|__)(.*?)\1/g, "$2")
+		cleaned = cleaned.replace(/(\*|_)(.*?)\1/g, "$2")
+
+		// Remove markdown links but keep the text
+		cleaned = cleaned.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+
+		// Remove excessive whitespace and newlines
+		cleaned = cleaned.replace(/\n{3,}/g, "\n\n")
+		cleaned = cleaned.replace(/\s{2,}/g, " ")
+
+		// Limit length for TTS (very long responses might be overwhelming)
+		if (cleaned.length > 1000) {
+			cleaned = cleaned.substring(0, 1000) + "... [response truncated for speech]"
+		}
+
+		return cleaned.trim()
 	}
 }

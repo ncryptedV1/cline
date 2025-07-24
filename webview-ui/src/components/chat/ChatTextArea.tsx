@@ -322,11 +322,24 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		// Voice input state
 		const [isRecording, setIsRecording] = useState(false)
 		const [isVoiceSupported, setIsVoiceSupported] = useState(false)
+		const [isTTSEnabled, setIsTTSEnabled] = useState(false)
+		const [isTTSPlaying, setIsTTSPlaying] = useState(false)
 		const [interimTranscript, setInterimTranscript] = useState("")
 
 		const [fileSearchResults, setFileSearchResults] = useState<SearchResult[]>([])
 		const [searchLoading, setSearchLoading] = useState(false)
 		const [, metaKeyChar] = useMetaKeyDetection(platform)
+
+		// TTS toggle function
+		const toggleTTS = useCallback(async () => {
+			try {
+				// TODO: Implement TTS toggle via gRPC
+				console.log("[TTS] Toggle TTS called")
+				setIsTTSEnabled(!isTTSEnabled)
+			} catch (error) {
+				console.error("[TTS] Error toggling TTS:", error)
+			}
+		}, [isTTSEnabled])
 
 		// Add a ref to track previous menu state
 		const prevShowModelSelector = useRef(showModelSelector)
@@ -1765,6 +1778,31 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 									<span className={`codicon ${isRecording ? "codicon-record" : "codicon-mic"}`} />
 								</div>
 							)}
+							{/* TTS button */}
+							<div
+								className={`input-icon-button ${isTTSEnabled ? "enabled" : ""} codicon codicon-volume`}
+								onClick={toggleTTS}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" || e.key === " ") {
+										e.preventDefault()
+										toggleTTS()
+									}
+								}}
+								tabIndex={0}
+								role="button"
+								aria-label={isTTSEnabled ? "Disable TTS" : "Enable TTS"}
+								style={{
+									marginRight: 5.5,
+									fontSize: 16.5,
+									color: isTTSEnabled ? "var(--vscode-inputValidation-warningBorder)" : undefined,
+									backgroundColor: isTTSEnabled
+										? "rgba(var(--vscode-inputValidation-warningForeground-rgb), 0.1)"
+										: undefined,
+									borderRadius: isTTSEnabled ? "3px" : undefined,
+								}}
+								title={isTTSEnabled ? "Disable TTS (Cmd+Shift+T)" : "Enable TTS (Cmd+Shift+T)"}>
+								<span className={`codicon ${isTTSEnabled ? "codicon-volume-mute" : "codicon-volume"}`} />
+							</div>
 							{/* <div
 								className={`input-icon-button ${shouldDisableImages ? "disabled" : ""} codicon codicon-device-camera`}
 								onClick={() => {

@@ -5,16 +5,31 @@ import "common.proto";
 option java_package = "bot.cline.proto";
 option java_multiple_files = true;
 
-// Service for voice input operations
+// Service for voice input and text-to-speech operations
 service VoiceService {
   // Toggles voice input recording on or off
   rpc toggleVoiceInput(EmptyRequest) returns (Empty);
+  
+  // Toggles text-to-speech on or off
+  rpc toggleTTS(EmptyRequest) returns (TTSToggleResponse);
+  
+  // Get current TTS settings
+  rpc getTTSSettings(EmptyRequest) returns (TTSSettingsResponse);
+  
+  // Update TTS settings
+  rpc updateTTSSettings(TTSSettingsRequest) returns (Empty);
+  
+  // Convert text to speech and play it
+  rpc speakText(SpeakTextRequest) returns (Empty);
   
   // Subscribe to voice recording state changes
   rpc subscribeToVoiceState(EmptyRequest) returns (stream VoiceState);
   
   // Subscribe to voice transcription updates (both interim and final)
   rpc subscribeToVoiceTranscripts(EmptyRequest) returns (stream VoiceTranscript);
+  
+  // Subscribe to TTS state changes
+  rpc subscribeToTTSState(EmptyRequest) returns (stream TTSState);
 }
 
 // Voice recording state
@@ -32,4 +47,51 @@ message VoiceTranscript {
 message VoiceError {
   string message = 1;
   string code = 2;
+}
+
+// TTS toggle response
+message TTSToggleResponse {
+  bool enabled = 1;
+}
+
+// TTS settings request
+message TTSSettingsRequest {
+  bool enabled = 1;
+  string language_code = 2;
+  string voice_name = 3;
+  string ssml_gender = 4;
+  string audio_encoding = 5;
+  float speaking_rate = 6;
+  float pitch = 7;
+  // Google Cloud credentials
+  string client_email = 8;
+  string private_key = 9;
+  string project_id = 10;
+}
+
+// TTS settings response
+message TTSSettingsResponse {
+  bool enabled = 1;
+  string language_code = 2;
+  string voice_name = 3;
+  string ssml_gender = 4;
+  string audio_encoding = 5;
+  float speaking_rate = 6;
+  float pitch = 7;
+  // Google Cloud credentials
+  string client_email = 8;
+  string private_key = 9;
+  string project_id = 10;
+}
+
+// Speak text request
+message SpeakTextRequest {
+  string text = 1;
+}
+
+// TTS state
+message TTSState {
+  bool enabled = 1;
+  bool is_playing = 2;
+  int32 queue_length = 3;
 } 

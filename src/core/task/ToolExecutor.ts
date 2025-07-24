@@ -55,6 +55,7 @@ import { MessageStateHandler } from "./message-state"
 import { AutoApprove } from "./tools/autoApprove"
 import { showNotificationForApprovalIfAutoApprovalEnabled } from "./utils"
 import { ChatSettings } from "@/shared/ChatSettings"
+import { VoiceService } from "../../services/voice/VoiceService"
 
 export class ToolExecutor {
 	private autoApprover: AutoApprove
@@ -85,6 +86,7 @@ export class ToolExecutor {
 		private clineIgnoreController: ClineIgnoreController,
 		private workspaceTracker: WorkspaceTracker,
 		private contextManager: ContextManager,
+		private voiceService: VoiceService,
 
 		// Configuration & Settings
 		private autoApprovalSettings: AutoApprovalSettings,
@@ -194,6 +196,8 @@ export class ToolExecutor {
 				return `[${block.name} for '${block.params.path}']`
 			case "web_fetch":
 				return `[${block.name} for '${block.params.url}']`
+			case "TTS_Summary":
+				return `[${block.name}]`
 		}
 	}
 
@@ -1768,6 +1772,44 @@ export class ToolExecutor {
 					}
 				} catch (error) {
 					await this.handleError("creating new task", error, block)
+					await this.saveCheckpoint()
+					break
+				}
+			}
+			case "TTS_Summary": {
+				console.log("[ToolExecutor] TTS_Summary tool called!")
+				const summary: string | undefined = block.params.summary
+				try {
+					if (block.partial) {
+						// For partial updates, just ignore - we only want to speak complete summaries
+						console.log("[ToolExecutor] TTS_Summary partial update ignored")
+						break
+					} else {
+						if (!summary) {
+							console.log("[ToolExecutor] TTS_Summary called but no summary provided")
+							this.taskState.consecutiveMistakeCount++
+							this.pushToolResult(await this.sayAndCreateMissingParamError("TTS_Summary", "summary"), block)
+							await this.saveCheckpoint()
+							break
+						}
+						this.taskState.consecutiveMistakeCount = 0
+
+						console.log(
+							"[ToolExecutor] Speaking TTS Summary:",
+							summary.substring(0, 100) + (summary.length > 100 ? "..." : ""),
+						)
+						// Use the voice service to speak the summary
+						await this.voiceService.speakText(summary.trim())
+						console.log("[ToolExecutor] TTS Summary spoken successfully")
+
+						// Return success response
+						this.pushToolResult(formatResponse.toolResult("Summary spoken successfully."), block)
+						await this.saveCheckpoint()
+						break
+					}
+				} catch (error) {
+					console.error("[ToolExecutor] Error speaking TTS summary:", error)
+					await this.handleError("speaking TTS summary", error, block)
 					await this.saveCheckpoint()
 					break
 				}
